@@ -26,6 +26,25 @@
 - 验证：`assembleMainlineDebug` 通过；APK 实际解析的包名、应用 label 和启动 label 均正确。
 - commits：`c16bd7b82`、`402b8cc7a`、`341ec6633`
 
+### Debug / release 共用的无界面安装前备份
+
+- 目的：公开 release 不可 `run-as`，但 ADB 覆盖升级仍应先取得最新、可验证的数据备份，且不要求
+  人工点屏幕。
+- 行为：
+  - manifest 注册 `InstallerBackupReceiver`，只接受持有系统 `android.permission.DUMP` 的调用方；
+    ADB shell 可以调用，普通第三方 App 不可以；
+  - receiver 通过 WorkManager 复用 `ZipBackupExportJob`，在应用 external cache 生成带随机 request id
+    的临时 ZIP 与状态文件；完成前使用 `.partial`，不会把半成品报成成功；
+  - 调用方拉取并核验 ZIP 后发送 cleanup action，应用删除对应 ZIP、partial 与状态文件，不在手机
+    长期积累安装备份；
+  - debug 与公开 release 都保留相同入口，不依赖 `android:debuggable`。
+- 覆盖区：
+  - `app/src/main/java/nodomain/freeyourgadget/gadgetbridge/externalevents/InstallerBackupReceiver.kt`
+  - `app/src/main/java/nodomain/freeyourgadget/gadgetbridge/util/backup/InstallerBackupWorker.kt`
+  - `app/src/main/AndroidManifest.xml`
+- 验证：对应 debug APK 已在 Android 16 实机由 ADB 无界面生成并拉取有效 ZIP；数据库
+  `integrity_check = ok`，cleanup 后手机临时目录为空。
+
 ### 数据库导出以分钟调度
 
 - 目的：让橘瓣本地 Gadgetbridge 工具更快读到新快照。

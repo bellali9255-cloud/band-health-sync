@@ -934,6 +934,16 @@
                 android:resource="@xml/shared_paths" />
         </provider>
 
+        <!--
+            Lets the desktop installer request a fresh, short-lived app ZIP before replacement,
+            including for non-debuggable release builds. DUMP limits this explicit receiver to adb
+            shell and privileged system callers; ordinary third-party apps cannot trigger it.
+        -->
+        <receiver
+            android:name=".externalevents.InstallerBackupReceiver"
+            android:exported="true"
+            android:permission="android.permission.DUMP" />
+
         <receiver
             android:name=".SleepAlarmWidget"
             android:label="@string/appwidget_sleep_alarm_widget_label"

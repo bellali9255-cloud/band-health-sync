@@ -216,10 +216,10 @@ curl https://你的域名/healthz
 服务现在只暴露一个 MCP 工具：`health_read` — 读取健康数据：当前状态、步数、心率、睡眠、每日摘要或完整数据。
 
 它有几个可选参数：
-- `data_type` :`current_status` 当前状态 / `steps` 步数 / `heart_rate` 心率 / `sleep` 睡眠 /`daily_summary` 每日汇总 / `all` 完整数据
-- `time_range`: `today` 今天 /`three_days`：最近 3 天
-- `days`:自定义读取最近多少天，范围 1–62，设置后会覆盖 `time_range`
-- `heart_rate_detail` : `daily` 按天汇总 / `hourly` 额外返回小时级心率汇总
+- data_type：读取类型，可选 `current_status / steps / heart_rate / sleep / daily_summary / all`
+- time_range：`today / three_days`，今天或最近 3 天
+- days：自定义读取最近多少天，范围 1–62；设置后覆盖 `time_range`
+- heart_rate_detail：`daily / hourly`，按天汇总或额外返回小时级心率汇总
 
 参数都可以不填。什么都不填时默认读取 `current_status`，适合 AI 日常快速了解你现在的状态。
 

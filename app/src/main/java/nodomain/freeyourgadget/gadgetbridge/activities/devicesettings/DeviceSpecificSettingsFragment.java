@@ -1692,6 +1692,14 @@ public class DeviceSpecificSettingsFragment extends AbstractPreferenceFragment i
                     deviceSpecificSettings.mergeFrom(coordinatorDeviceSettings);
                 }
             }
+
+            // Cycle context is phone-only: nothing is read from or sent to the watch, so it does
+            // not depend on any device capability and is offered for every device.
+            deviceSpecificSettings.addRootScreen(
+                    DeviceSpecificSettingsScreen.HEALTH,
+                    R.xml.devicesettings_cycle_context
+            );
+
             final int[] supportedAuthSettings = coordinator.getSupportedDeviceSpecificAuthenticationSettings();
             if (supportedAuthSettings != null && supportedAuthSettings.length > 0) {
                 deviceSpecificSettings.addRootScreen(

@@ -58,6 +58,12 @@
             android:title="@string/status" />
 
         <Preference
+            android:icon="@drawable/ic_history"
+            android:key="auto_export_log"
+            android:summary="@string/auto_export_log_summary"
+            android:title="@string/auto_export_log_title" />
+
+        <Preference
             android:icon="@drawable/ic_access_time"
             android:key="auto_export_last_execution"
             android:summary="@string/unknown"

@@ -48,4 +48,16 @@ object SelfHostedHealthEndpoint {
             url.toString()
         }
     }
+
+    /** The cycle configuration shares the same origin and token but has its own endpoint. */
+    @JvmStatic
+    fun cycle(raw: String?): String? {
+        val healthEndpoint = normalize(raw)?.toHttpUrlOrNull() ?: return null
+        return healthEndpoint.newBuilder()
+            .encodedPath("/cycle")
+            .query(null)
+            .fragment(null)
+            .build()
+            .toString()
+    }
 }

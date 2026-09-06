@@ -37,6 +37,8 @@ import nodomain.freeyourgadget.gadgetbridge.activities.AbstractSettingsActivityV
 import nodomain.freeyourgadget.gadgetbridge.activities.selfhostedhealth.SelfHostedHealthLogActivity
 import nodomain.freeyourgadget.gadgetbridge.util.GB
 import nodomain.freeyourgadget.gadgetbridge.util.GBPrefs
+import nodomain.freeyourgadget.gadgetbridge.util.cycle.CycleContextStore
+import nodomain.freeyourgadget.gadgetbridge.util.cycle.CycleContextSyncWorker
 import nodomain.freeyourgadget.gadgetbridge.util.selfhostedhealth.SelfHostedHealthEndpoint
 import nodomain.freeyourgadget.gadgetbridge.util.selfhostedhealth.SelfHostedHealthSyncWorker
 import nodomain.freeyourgadget.gadgetbridge.util.selfhostedhealth.SelfHostedHealthUploader
@@ -103,6 +105,9 @@ class SelfHostedHealthPreferencesActivity : AbstractSettingsActivityV2() {
                 // it if an interval is set. The listener fires before the new value is persisted, so
                 // the fresh state is passed in explicitly.
                 SelfHostedHealthSyncWorker.reschedulePeriodic(requireContext(), enabled = enabling)
+                if (enabling && CycleContextStore.isEnabled()) {
+                    CycleContextSyncWorker.enqueue(requireContext())
+                }
                 true
             }
         }
@@ -134,6 +139,9 @@ class SelfHostedHealthPreferencesActivity : AbstractSettingsActivityV2() {
                 }
                 urlPref.text = normalized
                 urlPref.summary = normalized
+                if (CycleContextStore.isEnabled()) {
+                    CycleContextSyncWorker.enqueue(requireContext())
+                }
                 // The value was rewritten here; returning false stops the framework from also
                 // persisting the raw text over it.
                 false
@@ -157,6 +165,9 @@ class SelfHostedHealthPreferencesActivity : AbstractSettingsActivityV2() {
                 val sanitized = SelfHostedHealthUploader.sanitizeToken(newValue as? String)
                 tokenPref.text = sanitized
                 tokenPref.summary = tokenSummary(sanitized)
+                if (CycleContextStore.isEnabled()) {
+                    CycleContextSyncWorker.enqueue(requireContext())
+                }
                 false
             }
             updateTokenSummary()

@@ -347,8 +347,22 @@
     <string name="pref_message_privacy_mode_complete">Hide all content</string>
     <string name="pref_message_privacy_mode_bodyonly">Hide only body</string>
     <string name="pref_title_weather">Weather</string>
-    <string name="pref_title_weather_location">Weather location (for LineageOS weather provider)</string>
-    <string name="pref_title_weather_summary">Used for the LineageOS weather provider, other Android versions need to use an app like \"Breezy Weather\". Find more information on the Gadgetbridge website.</string>
+    <string name="pref_title_weather_location">Legacy weather city</string>
+    <string name="pref_title_weather_summary">Built-in weather uses your phone location. The city field below is only for the legacy LineageOS weather provider.</string>
+    <string name="builtin_weather_enabled_title">Built-in weather</string>
+    <string name="builtin_weather_enabled_summary">Fetch free weather from Open-Meteo and send it to supported watches. No account, API key, or weather app is needed.</string>
+    <string name="builtin_weather_location_title">Use phone location</string>
+    <string name="builtin_weather_location_summary">Built-in weather uses your saved phone location. Tap to get the current location; no city name or coordinates are needed.</string>
+    <string name="builtin_weather_location_set">Using phone location: %1$s (tap to update)</string>
+    <string name="pref_weather_city_summary">Only used by the old LineageOS weather provider; built-in weather uses your phone location.</string>
+    <string name="pref_weather_city_dialog_message">Enter a city or town name, for example \"Singapore\" or \"Taipei\". Do not enter coordinates. This field is only for the old LineageOS weather provider.</string>
+    <string name="builtin_weather_current_location">Current location</string>
+    <string name="builtin_weather_refresh_title">Refresh weather now</string>
+    <string name="builtin_weather_status_title">Weather status</string>
+    <string name="builtin_weather_status_idle">Not updated yet</string>
+    <string name="builtin_weather_status_updated">Updated for %1$s</string>
+    <string name="builtin_weather_status_no_location">Set a location or grant location permission first</string>
+    <string name="builtin_weather_status_failed">Weather update failed: %1$s</string>
     <string name="pref_applications_settings">Applications list</string>
     <string name="pref_blacklist_calendars">Blacklist Calendars</string>
     <string name="pref_blacklist_calendars_summary">Blacklisted calendars will not be synced to the device</string>
@@ -414,6 +428,7 @@
     <string name="pref_summary_location_keep_uptodate">Try to get the current location at runtime, use the stored location as fallback</string>
     <string name="toast_enable_networklocationprovider">Please enable network location</string>
     <string name="toast_aqurired_networklocation">location acquired</string>
+    <string name="permission_location_denied">Location permission was denied. Weather location was not updated.</string>
     <string name="pref_title_pebble_forceprotocol">Force notification protocol</string>
     <string name="pref_summary_pebble_forceprotocol">This option forces using the latest notification protocol depending on the firmware version. KNOW WHAT YOU ARE DOING!</string>
     <string name="pref_title_pebble_forceuntested">Enable untested features</string>
@@ -658,7 +673,7 @@
     <string name="pref_title_auto_export_enabled">Auto export enabled</string>
     <string name="pref_title_auto_export_location">Export location</string>
     <string name="pref_title_auto_export_interval">Export interval</string>
-    <string name="pref_summary_auto_export_interval">Export every %d minutes</string>
+    <string name="pref_summary_auto_export_interval">Periodic fallback: export every %d minutes</string>
     <string name="pref_title_auto_export_on_sync">Export on sync</string>
     <string name="pref_summary_auto_export_on_sync">Trigger an export immediately after each device data sync</string>
     <!-- GPX Auto export -->
@@ -4792,7 +4807,17 @@
     <string name="pref_new_sync_protocol_title">New sync protocol</string>
     <string name="pref_new_sync_protocol_summary">Enable this if some information is not being fetched. Experimental and potentially unstable.</string>
     <string name="auto_export_last_execution">Last execution</string>
-    <string name="auto_export_next_execution">Next execution</string>
+    <string name="auto_export_next_execution">Next periodic fallback</string>
+    <string name="auto_export_log_title">Export log</string>
+    <string name="auto_export_log_summary">View recent exports and what triggered them</string>
+    <string name="auto_export_log_empty">No database export runs recorded yet.</string>
+    <string name="auto_export_log_dialog_close">Close</string>
+    <string name="auto_export_trigger_sync">After new data</string>
+    <string name="auto_export_trigger_periodic">Periodic fallback</string>
+    <string name="auto_export_trigger_manual">Manual</string>
+    <string name="auto_export_log_success">Succeeded</string>
+    <string name="auto_export_log_failed">Failed: %1$s</string>
+    <string name="auto_export_status_with_trigger">%1$s: %2$s</string>
     <string name="work_info_status_running">Running</string>
     <string name="work_info_status_enqueued">Enqueued</string>
     <string name="work_info_status_succeeded">Succeeded</string>
@@ -5271,4 +5296,25 @@
     <string name="qs_tile_label_10">Gadgetbridge 10</string>
     <string name="activity_summary_set_header_photo_title">Set header photo</string>
     <string name="activity_summary_remove_header_photo_title">Remove header photo</string>
+    <string name="cycle_context_settings_title">Menstrual cycle</string>
+    <string name="cycle_enabled_title">Menstrual cycle reminders</string>
+    <string name="cycle_enabled_summary">Upload cycle days to your self-hosted server</string>
+    <string name="cycle_last_start_title">Last period started</string>
+    <string name="cycle_lengths_title">Cycle length</string>
+    <string name="cycle_lengths_summary">Cycle %1$d days · Period %2$d days</string>
+    <string name="cycle_length_days_hint">Cycle days</string>
+    <string name="cycle_period_days_hint">Period days</string>
+    <string name="cycle_arrived_title">My period started</string>
+    <string name="cycle_arrived_summary">Set the last start date to today</string>
+    <string name="cycle_today_day_title">Cycle day %1$d</string>
+    <string name="cycle_today_day_unknown">Cycle day</string>
+    <string name="cycle_today_day_summary">Cycle day = current date - start date + 1</string>
+    <string name="cycle_today_day_edit_title">Change cycle day</string>
+    <string name="cycle_today_day_hint">Cycle day</string>
+    <string name="cycle_set_start_first">Set the last start date first</string>
+    <string name="cycle_invalid_lengths">Use positive whole numbers, with period days no longer than the cycle</string>
+    <string name="cycle_invalid_day">Day must be a positive whole number within the cycle length</string>
+    <string name="cycle_last_start_notice">Last start is the most recent first day of your period that you confirmed. The app predicts the next start date from your cycle length and updates it to an estimated date when it arrives. Tap “My period started” to calibrate it.</string>
+    <string name="cycle_pending_clear_title">Server copy not deleted yet</string>
+    <string name="cycle_pending_clear_summary">The cycle data on this phone is already gone, but the deletion never reached your server. It will be retried automatically the next time the server is reachable. Check the server address and token if this stays here.</string>
 </resources>

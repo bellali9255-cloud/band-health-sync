@@ -22,15 +22,19 @@ class InstallerBackupWorker(
 ) : Worker(appContext, workerParams), ZipBackupCallback {
     private var exportSucceeded = false
     private var exportError: String? = null
+    private var exportJob: ZipBackupExportJob? = null
+
+    private val requestId: String?
+        get() = inputData.getString(INPUT_REQUEST_ID)
 
     override fun doWork(): Result {
-        val requestId = inputData.getString(INPUT_REQUEST_ID)
-        if (!isValidRequestId(requestId)) {
+        val inputRequestId = requestId
+        if (!isValidRequestId(inputRequestId)) {
             LOG.warn("Rejecting invalid installer backup request id")
             return Result.failure()
         }
 
-        val validRequestId = requestId!!
+        val validRequestId = inputRequestId!!
         val directory = getBackupDirectory(applicationContext)
         if (directory == null) {
             LOG.error("External cache directory is unavailable for installer backup")
@@ -44,7 +48,15 @@ class InstallerBackupWorker(
         deleteIfPresent(finalFile)
         writeStatus(applicationContext, validRequestId, STATE_RUNNING)
 
-        ZipBackupExportJob(applicationContext, this, partialFile.toUri()).run()
+        try {
+            exportJob = ZipBackupExportJob(applicationContext, this, partialFile.toUri())
+            exportJob!!.run()
+        } catch (error: Throwable) {
+            exportError = sanitizeStatusValue(error.message ?: error.javaClass.simpleName)
+            writeStatus(applicationContext, validRequestId, STATE_FAILED, error = exportError)
+            deleteIfPresent(partialFile)
+            return Result.failure()
+        }
 
         if (!exportSucceeded || !partialFile.isFile || partialFile.length() < MIN_BACKUP_SIZE_BYTES) {
             deleteIfPresent(partialFile)
@@ -68,11 +80,30 @@ class InstallerBackupWorker(
         return Result.success()
     }
 
+    override fun onStopped() {
+        exportJob?.abort()
+        val validRequestId = requestId
+        if (isValidRequestId(validRequestId)) {
+            writeStatus(
+                applicationContext,
+                validRequestId!!,
+                STATE_FAILED,
+                error = "Backup worker stopped before completion"
+            )
+            val directory = getBackupDirectory(applicationContext)
+            if (directory != null) {
+                deleteIfPresent(File(directory, "$validRequestId.zip.partial"))
+            }
+        }
+        super.onStopped()
+    }
+
     override fun onProgress(progress: Int, message: String?) {
         // The installer polls the status file. UI progress and notifications are intentionally omitted.
     }
 
     override fun onSuccess(warnings: String?) {
+        if (isStopped) return
         exportSucceeded = true
         if (!warnings.isNullOrBlank()) {
             LOG.warn("Installer backup completed with warnings: {}", warnings)
@@ -80,6 +111,7 @@ class InstallerBackupWorker(
     }
 
     override fun onFailure(errorMessage: String?) {
+        if (isStopped) return
         exportError = sanitizeStatusValue(errorMessage ?: "Unknown ZIP export error")
     }
 
@@ -104,15 +136,17 @@ class InstallerBackupWorker(
             requestId != null && REQUEST_ID_PATTERN.matches(requestId)
 
         @JvmStatic
+        fun uniqueWorkName(requestId: String): String = "$UNIQUE_WORK_NAME:$requestId"
+
+        @JvmStatic
         fun prepareRequest(context: Context, requestId: String): Boolean {
             if (!isValidRequestId(requestId)) return false
             val directory = getBackupDirectory(context) ?: return false
 
-            directory.listFiles()?.forEach { file ->
-                if (isInstallerGeneratedFile(file.name)) {
-                    deleteIfPresent(file)
-                }
-            }
+            deleteIfPresent(File(directory, "$requestId.zip"))
+            deleteIfPresent(File(directory, "$requestId.zip.partial"))
+            deleteIfPresent(File(directory, "$requestId.status"))
+            deleteIfPresent(File(directory, "$requestId.status.tmp"))
 
             return writeStatus(context, requestId, STATE_QUEUED)
         }

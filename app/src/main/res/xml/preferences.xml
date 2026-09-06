@@ -387,12 +387,40 @@
             android:summary="@string/pref_title_weather_summary"
             android:title="@string/pref_title_weather">
 
+            <SwitchPreferenceCompat
+                android:defaultValue="false"
+                android:icon="@drawable/ic_partly_cloudy_day"
+                android:key="builtin_weather_enabled"
+                android:layout="@layout/preference_checkbox"
+                android:summary="@string/builtin_weather_enabled_summary"
+                android:title="@string/builtin_weather_enabled_title" />
+
+            <Preference
+                android:icon="@drawable/ic_gps_location"
+                android:key="builtin_weather_location"
+                android:summary="@string/builtin_weather_location_summary"
+                android:title="@string/builtin_weather_location_title" />
+
+            <Preference
+                android:dependency="builtin_weather_enabled"
+                android:icon="@drawable/ic_update"
+                android:key="builtin_weather_refresh"
+                android:persistent="false"
+                android:title="@string/builtin_weather_refresh_title" />
+
+            <Preference
+                android:key="builtin_weather_status"
+                android:persistent="false"
+                android:summary="@string/builtin_weather_status_idle"
+                android:title="@string/builtin_weather_status_title" />
+
             <EditTextPreference
+                android:dialogMessage="@string/pref_weather_city_dialog_message"
                 android:inputType="text"
                 android:key="weather_city"
                 android:title="@string/pref_title_weather_location"
-                app:iconSpaceReserved="false"
-                app:useSimpleSummaryProvider="true" />
+                android:summary="@string/pref_weather_city_summary"
+                app:iconSpaceReserved="false" />
         </PreferenceScreen>
 
         <PreferenceScreen

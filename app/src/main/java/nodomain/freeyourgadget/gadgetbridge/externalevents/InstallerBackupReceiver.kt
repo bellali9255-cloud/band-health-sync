@@ -43,8 +43,8 @@ class InstallerBackupReceiver : BroadcastReceiver() {
                     .build()
 
                 WorkManager.getInstance(context).enqueueUniqueWork(
-                    InstallerBackupWorker.UNIQUE_WORK_NAME,
-                    ExistingWorkPolicy.REPLACE,
+                    InstallerBackupWorker.uniqueWorkName(validRequestId),
+                    ExistingWorkPolicy.KEEP,
                     request
                 )
                 LOG.info("Queued installer backup request {}", validRequestId)

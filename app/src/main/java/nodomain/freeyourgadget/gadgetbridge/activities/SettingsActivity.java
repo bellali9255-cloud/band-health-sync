@@ -32,6 +32,7 @@ import android.location.LocationManager;
 import android.os.Build;
 import android.os.Bundle;
 import android.text.InputType;
+import android.text.TextUtils;
 import android.view.View;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
@@ -42,6 +43,7 @@ import android.widget.Toast;
 
 import androidx.core.app.ActivityCompat;
 import androidx.localbroadcastmanager.content.LocalBroadcastManager;
+import androidx.preference.EditTextPreference;
 import androidx.preference.ListPreference;
 import androidx.preference.Preference;
 import androidx.preference.PreferenceFragmentCompat;
@@ -76,6 +78,8 @@ import nodomain.freeyourgadget.gadgetbridge.externalevents.TimeChangeReceiver;
 import nodomain.freeyourgadget.gadgetbridge.util.FileUtils;
 import nodomain.freeyourgadget.gadgetbridge.util.GB;
 import nodomain.freeyourgadget.gadgetbridge.util.Prefs;
+import nodomain.freeyourgadget.gadgetbridge.util.GBPrefs;
+import nodomain.freeyourgadget.gadgetbridge.util.builtinweather.BuiltinWeatherWorker;
 
 public class SettingsActivity extends AbstractSettingsActivityV2 {
     public static final String PREF_LANGUAGE = "language";
@@ -275,50 +279,21 @@ public class SettingsActivity extends AbstractSettingsActivityV2 {
             pref = findPreference("location_aquire");
             if (pref != null) {
                 pref.setOnPreferenceClickListener(preference -> {
-                    if (ActivityCompat.checkSelfPermission(requireContext().getApplicationContext(), Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-                        ActivityCompat.requestPermissions(requireActivity(), new String[]{Manifest.permission.ACCESS_COARSE_LOCATION}, 0);
-                    }
-
-                    LocationManager locationManager = (LocationManager) requireContext().getSystemService(Context.LOCATION_SERVICE);
-                    Criteria criteria = new Criteria();
-                    String provider = locationManager.getBestProvider(criteria, false);
-                    if (provider != null) {
-                        Location location = locationManager.getLastKnownLocation(provider);
-                        if (location != null) {
-                            setLocationPreferences(location);
-                        } else {
-                            locationManager.requestSingleUpdate(provider, new LocationListener() {
-                                @Override
-                                public void onLocationChanged(Location location) {
-                                    setLocationPreferences(location);
-                                }
-
-                                @Override
-                                public void onStatusChanged(String provider, int status, Bundle extras) {
-                                    LOG.info("provider status changed to " + status + " (" + provider + ")");
-                                }
-
-                                @Override
-                                public void onProviderEnabled(String provider) {
-                                    LOG.info("provider enabled (" + provider + ")");
-                                }
-
-                                @Override
-                                public void onProviderDisabled(String provider) {
-                                    LOG.info("provider disabled (" + provider + ")");
-                                    GB.toast(requireContext(), getString(R.string.toast_enable_networklocationprovider), 3000, 0);
-                                }
-                            }, null);
-                        }
-                    } else {
-                        LOG.warn("No location provider found, did you deny location permission?");
-                    }
+                    acquireLocation();
                     return true;
                 });
             }
 
             pref = findPreference("weather_city");
             if (pref != null) {
+                if (pref instanceof EditTextPreference) {
+                    pref.setSummaryProvider(preference -> {
+                        final String city = ((EditTextPreference) preference).getText();
+                        return TextUtils.isEmpty(city)
+                                ? getString(R.string.pref_weather_city_summary)
+                                : city;
+                    });
+                }
                 pref.setOnPreferenceChangeListener((preference, newVal) -> {
                     // reset city id and force a new lookup
                     GBApplication.getPrefs().getPreferences().edit().putString("weather_cityid", null).apply();
@@ -327,6 +302,50 @@ public class SettingsActivity extends AbstractSettingsActivityV2 {
                     requireContext().sendBroadcast(intent);
                     return true;
                 });
+            }
+
+            pref = findPreference("builtin_weather_location");
+            if (pref != null) {
+                updateBuiltinWeatherLocationSummary();
+                pref.setOnPreferenceClickListener(preference -> {
+                    acquireLocation();
+                    return true;
+                });
+            }
+
+            final SwitchPreferenceCompat builtinWeather = findPreference(GBPrefs.BUILTIN_WEATHER_ENABLED);
+            if (builtinWeather != null) {
+                builtinWeather.setOnPreferenceChangeListener((preference, newVal) -> {
+                    final boolean enabled = Boolean.TRUE.equals(newVal);
+                    // Persist before enqueueing: the worker checks this flag when it starts.
+                    prefs.getPreferences().edit().putBoolean(GBPrefs.BUILTIN_WEATHER_ENABLED, enabled).apply();
+                    BuiltinWeatherWorker.reschedule(requireContext(), enabled);
+                    if (enabled) {
+                        if (!hasValidWeatherLocation()) {
+                            acquireLocation();
+                        }
+                        BuiltinWeatherWorker.executeNow(requireContext());
+                    }
+                    return true;
+                });
+            }
+
+            pref = findPreference("builtin_weather_refresh");
+            if (pref != null) {
+                pref.setOnPreferenceClickListener(preference -> {
+                    if (prefs.getBoolean(GBPrefs.BUILTIN_WEATHER_ENABLED, false)) {
+                        BuiltinWeatherWorker.executeNow(requireContext());
+                    }
+                    return true;
+                });
+            }
+
+            pref = findPreference(GBPrefs.BUILTIN_WEATHER_STATUS);
+            if (pref != null) {
+                final String status = prefs.getString(GBPrefs.BUILTIN_WEATHER_STATUS, null);
+                if (status != null) {
+                    pref.setSummary(status);
+                }
             }
 
             final ListPreference audioPlayer = findPreference("audio_player");
@@ -587,6 +606,104 @@ public class SettingsActivity extends AbstractSettingsActivityV2 {
             getListView().post(runnable);
         }
 
+        private static final int LOCATION_PERMISSION_REQUEST = 1001;
+
+        private void acquireLocation() {
+            final Context context = getContext();
+            if (context == null) {
+                return;
+            }
+            if (ActivityCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+                requestPermissions(new String[]{Manifest.permission.ACCESS_COARSE_LOCATION}, LOCATION_PERMISSION_REQUEST);
+                return;
+            }
+            acquireLocationFromProvider(context);
+        }
+
+        private void acquireLocationFromProvider(final Context context) {
+            final LocationManager locationManager = (LocationManager) context.getSystemService(Context.LOCATION_SERVICE);
+            if (locationManager == null) {
+                LOG.warn("No location manager found");
+                return;
+            }
+
+            final Criteria criteria = new Criteria();
+            final String provider = locationManager.getBestProvider(criteria, false);
+            if (provider == null) {
+                LOG.warn("No location provider found, did you deny location permission?");
+                return;
+            }
+
+            final Location location = locationManager.getLastKnownLocation(provider);
+            if (location != null) {
+                setLocationPreferences(location);
+                return;
+            }
+
+            locationManager.requestSingleUpdate(provider, new LocationListener() {
+                @Override
+                public void onLocationChanged(Location location) {
+                    setLocationPreferences(location);
+                }
+
+                @Override
+                public void onStatusChanged(String provider, int status, Bundle extras) {
+                    LOG.info("provider status changed to " + status + " (" + provider + ")");
+                }
+
+                @Override
+                public void onProviderEnabled(String provider) {
+                    LOG.info("provider enabled (" + provider + ")");
+                }
+
+                @Override
+                public void onProviderDisabled(String provider) {
+                    LOG.info("provider disabled (" + provider + ")");
+                    GB.toast(context, getString(R.string.toast_enable_networklocationprovider), 3000, 0);
+                }
+            }, null);
+        }
+
+        @Override
+        public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+            super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+            if (requestCode != LOCATION_PERMISSION_REQUEST) {
+                return;
+            }
+            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                acquireLocationFromProvider(requireContext());
+            } else {
+                GB.toast(requireContext(), getString(R.string.permission_location_denied), 3000, 0);
+            }
+        }
+
+        private boolean hasValidWeatherLocation() {
+            final float[] longLat = GBApplication.getPrefs().getLongLat(requireContext());
+            return isValidWeatherLocation(longLat[1], longLat[0]);
+        }
+
+        private static boolean isValidWeatherLocation(float latitude, float longitude) {
+            return Float.isFinite(latitude) && Float.isFinite(longitude)
+                    && latitude >= -90f && latitude <= 90f
+                    && longitude >= -180f && longitude <= 180f
+                    && (latitude != 0f || longitude != 0f);
+        }
+
+        private void updateBuiltinWeatherLocationSummary() {
+            final Preference preference = findPreference("builtin_weather_location");
+            final Context context = getContext();
+            if (preference == null || context == null) {
+                return;
+            }
+            final float[] longLat = GBApplication.getPrefs().getLongLat(context);
+            if (!isValidWeatherLocation(longLat[1], longLat[0])) {
+                preference.setSummary(R.string.builtin_weather_location_summary);
+                return;
+            }
+            final String coordinates = String.format(Locale.US, "%.4f, %.4f", longLat[1], longLat[0]);
+            preference.setSummary(getString(R.string.builtin_weather_location_set, coordinates));
+        }
+
         private void setLocationPreferences(Location location) {
             String latitude = String.format(Locale.US, "%.6g", location.getLatitude());
             String longitude = String.format(Locale.US, "%.6g", location.getLongitude());
@@ -597,6 +714,10 @@ public class SettingsActivity extends AbstractSettingsActivityV2 {
                     .putString("location_latitude", latitude)
                     .putString("location_longitude", longitude)
                     .apply();
+            updateBuiltinWeatherLocationSummary();
+            if (GBApplication.getPrefs().getBoolean(GBPrefs.BUILTIN_WEATHER_ENABLED, false)) {
+                BuiltinWeatherWorker.executeNow(requireContext());
+            }
         }
 
         /**

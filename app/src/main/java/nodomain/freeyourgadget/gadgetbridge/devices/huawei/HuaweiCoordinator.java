@@ -499,7 +499,6 @@ public abstract class HuaweiCoordinator extends AbstractDeviceCoordinator {
         if (deviceState.supportsThreeCircle() || deviceState.supportsThreeCircleLite()) {
             deviceSpecificSettings.addRootScreen(DeviceSpecificSettingsScreen.HEALTH, R.xml.devicesettings_huawei_activity_reminders);
         }
-
         // Notifications
         final List<Integer> notifications = deviceSpecificSettings.addRootScreen(DeviceSpecificSettingsScreen.NOTIFICATIONS);
         notifications.add(R.xml.devicesettings_notifications_enable);

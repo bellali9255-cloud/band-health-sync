@@ -29,6 +29,7 @@ import androidx.activity.result.contract.ActivityResultContracts.StartActivityFo
 import androidx.core.content.edit
 import androidx.core.net.toUri
 import androidx.lifecycle.lifecycleScope
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import androidx.preference.Preference
 import androidx.preference.PreferenceGroup
 import androidx.work.WorkInfo
@@ -40,9 +41,11 @@ import nodomain.freeyourgadget.gadgetbridge.GBApplication
 import nodomain.freeyourgadget.gadgetbridge.R
 import nodomain.freeyourgadget.gadgetbridge.activities.AbstractPreferenceFragment
 import nodomain.freeyourgadget.gadgetbridge.util.AndroidUtils
+import nodomain.freeyourgadget.gadgetbridge.util.AutoExportLog
 import nodomain.freeyourgadget.gadgetbridge.util.DateTimeUtils
 import nodomain.freeyourgadget.gadgetbridge.util.GBPrefs
 import nodomain.freeyourgadget.gadgetbridge.util.PeriodicExporter
+import nodomain.freeyourgadget.gadgetbridge.database.PeriodicDbExporter
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import java.util.Date
@@ -63,8 +66,19 @@ abstract class AbstractAutoExportSettingsFragment(
         val prefKeyInterval = keyPrefix + GBPrefs.AUTO_EXPORT_INTERVAL
         val prefKeyStartTime = keyPrefix + "auto_export_start_time"
         val prefKeyRunNow = keyPrefix + "auto_export_run_now"
+        val prefKeyLog = keyPrefix + "auto_export_log"
 
         val gbPrefs = GBApplication.getPrefs()
+
+        // The event-driven log describes the database snapshot path only. ZIP exports keep the
+        // upstream status screen and must not expose an empty, unrelated log entry.
+        findPreference<Preference>(prefKeyLog)?.let { logPreference ->
+            logPreference.isVisible = exporter === PeriodicDbExporter
+            logPreference.setOnPreferenceClickListener {
+                showAutoExportLog()
+                true
+            }
+        }
 
         val exportLocationPicker = registerForActivityResult<Intent?, ActivityResult?>(
             StartActivityForResult(),
@@ -186,12 +200,16 @@ abstract class AbstractAutoExportSettingsFragment(
             }
 
             val lastExecution = sortedWorkInfos.findLast { workInfo -> workInfo.state != WorkInfo.State.ENQUEUED }
-            val nextExecution = sortedWorkInfos.findLast { workInfo -> workInfo.state == WorkInfo.State.ENQUEUED }
+            val periodicWorkInfos = sortedWorkInfos.filter { workInfo ->
+                !workInfo.tags.contains(exporter.getEventWorkTag())
+            }
+            val nextExecution = periodicWorkInfos.findLast { workInfo -> workInfo.state == WorkInfo.State.ENQUEUED }
+            val statusWork = sortedWorkInfos.lastOrNull() ?: lastExecution
 
-            if (lastExecution != null) {
-                prefStatus?.summary = when (lastExecution.state) {
+            if (statusWork != null) {
+                prefStatus?.summary = when (statusWork.state) {
                     WorkInfo.State.RUNNING -> {
-                        val progress = lastExecution.progress.getInt("progress", -1)
+                        val progress = statusWork.progress.getInt("progress", -1)
                         if (progress >= 0) {
                             requireContext().getString(
                                 R.string.work_info_running_percentage,
@@ -213,6 +231,34 @@ abstract class AbstractAutoExportSettingsFragment(
                 prefStatus?.summary = requireContext().getString(R.string.unknown)
             }
 
+            // WorkManager's tag also contains the periodic fallback and transient debounced
+            // requests. For DB exports, the persisted log is the reliable source for the latest
+            // completed result and its trigger, including runs that have already been pruned.
+            val eventWorkPending = workInfos.any { workInfo ->
+                workInfo.tags.contains(exporter.getEventWorkTag()) &&
+                    (workInfo.state == WorkInfo.State.ENQUEUED || workInfo.state == WorkInfo.State.RUNNING)
+            }
+            val anyWorkRunning = workInfos.any { workInfo -> workInfo.state == WorkInfo.State.RUNNING }
+            if (exporter === PeriodicDbExporter && !eventWorkPending && !anyWorkRunning) {
+                AutoExportLog.read(requireContext()).firstOrNull()?.let { entry ->
+                    val trigger = when (entry.trigger) {
+                        PeriodicExporter.TRIGGER_SYNC -> R.string.auto_export_trigger_sync
+                        PeriodicExporter.TRIGGER_MANUAL -> R.string.auto_export_trigger_manual
+                        else -> R.string.auto_export_trigger_periodic
+                    }
+                    val result = if (entry.success) {
+                        getString(R.string.auto_export_log_success)
+                    } else {
+                        getString(R.string.auto_export_log_failed, entry.message ?: getString(R.string.unknown_error))
+                    }
+                    prefStatus?.summary = getString(
+                        R.string.auto_export_status_with_trigger,
+                        getString(trigger),
+                        result
+                    )
+                }
+            }
+
             // We need to persist and fetch the timestamp from preferences, since the WorkInfo will not contain it
             val lastAutoExportTimestamp: Long = gbPrefs.getLong(prefKeyLastExecution, 0)
             if (lastAutoExportTimestamp > 0) {
@@ -225,6 +271,32 @@ abstract class AbstractAutoExportSettingsFragment(
                 prefNextExecution?.summary = formatDateWithDiff(Date(nextExecution.nextScheduleTimeMillis))
             }
         }
+    }
+
+    private fun showAutoExportLog() {
+        val entries = AutoExportLog.read(requireContext())
+        val message = if (entries.isEmpty()) {
+            getString(R.string.auto_export_log_empty)
+        } else {
+            entries.take(20).joinToString("\n") { entry ->
+                val trigger = when (entry.trigger) {
+                    PeriodicExporter.TRIGGER_SYNC -> getString(R.string.auto_export_trigger_sync)
+                    PeriodicExporter.TRIGGER_MANUAL -> getString(R.string.auto_export_trigger_manual)
+                    else -> getString(R.string.auto_export_trigger_periodic)
+                }
+                val result = if (entry.success) {
+                    getString(R.string.auto_export_log_success)
+                } else {
+                    getString(R.string.auto_export_log_failed, entry.message ?: getString(R.string.unknown_error))
+                }
+                "${DateTimeUtils.formatDateTime(Date(entry.timestampMs))} | $trigger | $result"
+            }
+        }
+        MaterialAlertDialogBuilder(requireContext())
+            .setTitle(R.string.auto_export_log_title)
+            .setMessage(message)
+            .setPositiveButton(R.string.auto_export_log_dialog_close, null)
+            .show()
     }
 
     /**

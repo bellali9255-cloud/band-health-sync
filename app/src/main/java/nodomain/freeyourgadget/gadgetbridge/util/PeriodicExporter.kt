@@ -2,6 +2,7 @@ package nodomain.freeyourgadget.gadgetbridge.util
 
 import android.content.Context
 import androidx.core.content.edit
+import androidx.work.Data
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.ExistingWorkPolicy
 import androidx.work.ListenableWorker
@@ -71,6 +72,7 @@ abstract class PeriodicExporter {
                 autoExportInterval.toLong(),
                 TimeUnit.MINUTES
             ).setInitialDelay(initialDelayMillis, TimeUnit.MILLISECONDS)
+                .setInputData(Data.Builder().putString(INPUT_TRIGGER, TRIGGER_PERIODIC).build())
                 .addTag(getWorkTag())
                 .addTag("$TAG_CREATED_AT${System.currentTimeMillis()}")
                 .build()
@@ -104,8 +106,14 @@ abstract class PeriodicExporter {
     }
 
     fun executeNow() {
+        executeNow(TRIGGER_MANUAL)
+    }
+
+    /** Enqueue a one-shot export and retain why it was requested for the status/log UI. */
+    fun executeNow(trigger: String) {
         val workManager = WorkManager.getInstance(GBApplication.getContext())
         val exportRequest = OneTimeWorkRequest.Builder(getWorkerClass())
+            .setInputData(Data.Builder().putString(INPUT_TRIGGER, trigger).build())
             .addTag(getWorkTag())
             .addTag("$TAG_CREATED_AT${System.currentTimeMillis()}")
             .build()
@@ -123,7 +131,9 @@ abstract class PeriodicExporter {
         val workManager = WorkManager.getInstance(GBApplication.getContext())
         val exportRequest = OneTimeWorkRequest.Builder(getWorkerClass())
             .setInitialDelay(delaySeconds, TimeUnit.SECONDS)
+            .setInputData(Data.Builder().putString(INPUT_TRIGGER, TRIGGER_SYNC).build())
             .addTag(getWorkTag())
+            .addTag(getEventWorkTag())
             .addTag("$TAG_CREATED_AT${System.currentTimeMillis()}")
             .build()
         workManager.enqueueUniqueWork(
@@ -137,9 +147,17 @@ abstract class PeriodicExporter {
         return "${getKeyPrefix()}exporter_worker"
     }
 
+    fun getEventWorkTag(): String {
+        return "${getWorkTag()}_on_new_data"
+    }
+
     companion object {
         private val LOG: Logger = LoggerFactory.getLogger(PeriodicExporter::class.java)
 
         const val TAG_CREATED_AT = "createdAt-"
+        const val INPUT_TRIGGER = "export_trigger"
+        const val TRIGGER_PERIODIC = "periodic"
+        const val TRIGGER_SYNC = "sync"
+        const val TRIGGER_MANUAL = "manual"
     }
 }

@@ -126,6 +126,7 @@ import nodomain.freeyourgadget.gadgetbridge.util.GB;
 import nodomain.freeyourgadget.gadgetbridge.util.GBPrefs;
 import nodomain.freeyourgadget.gadgetbridge.util.Prefs;
 import nodomain.freeyourgadget.gadgetbridge.util.selfhostedhealth.SelfHostedHealthSyncWorker;
+import nodomain.freeyourgadget.gadgetbridge.util.builtinweather.BuiltinWeatherWorker;
 import nodomain.freeyourgadget.gadgetbridge.util.language.LanguageUtils;
 import nodomain.freeyourgadget.gadgetbridge.util.language.Transliterator;
 
@@ -1467,6 +1468,8 @@ public class DeviceCommunicationService extends Service implements SharedPrefere
                 // Re-arm the periodic self-hosted health upload from the same lifecycle that arms the
                 // post-fetch trigger, so a schedule lost to a reinstall comes back on next service start.
                 SelfHostedHealthSyncWorker.reschedulePeriodic(this);
+                // Keep the built-in weather source alive across app/service restarts.
+                BuiltinWeatherWorker.reschedule(this);
             }
             if (mTimeChangeReceiver == null) {
                 mTimeChangeReceiver = new TimeChangeReceiver();

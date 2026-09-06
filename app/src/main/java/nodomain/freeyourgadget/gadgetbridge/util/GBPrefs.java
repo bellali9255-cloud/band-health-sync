@@ -146,6 +146,21 @@ public class GBPrefs extends Prefs {
     public static final String SELF_HOSTED_HEALTH_RESET_CURSOR = "selfhosted_health_reset_cursor";
     public static final String SELF_HOSTED_HEALTH_LOG = "selfhosted_health_log";
 
+    // Built-in weather source (Open-Meteo, no account or API key required).
+    public static final String BUILTIN_WEATHER_ENABLED = "builtin_weather_enabled";
+    public static final String BUILTIN_WEATHER_STATUS = "builtin_weather_status";
+
+    // Optional menstrual-cycle context for AI health interpretation. The dates and lengths stay in
+    // ordinary preferences rather than the health database and are removed when the switch is off.
+    public static final String CYCLE_ENABLED = "cycle_enabled";
+    public static final String CYCLE_LAST_START = "cycle_last_start";
+    public static final String CYCLE_LENGTH_DAYS = "cycle_length_days";
+    public static final String CYCLE_PERIOD_DAYS = "cycle_period_days";
+    public static final String CYCLE_LAST_CONFIRMED = "cycle_last_confirmed";
+    // Survives the wipe on purpose: it carries no cycle data, only the fact that the server may
+    // still hold a copy we failed to delete. Cleared once the server confirms the removal.
+    public static final String CYCLE_PENDING_CLEAR = "cycle_pending_clear";
+
     @Deprecated
     public GBPrefs(Prefs prefs) {
         this(prefs.getPreferences());

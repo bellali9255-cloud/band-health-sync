@@ -213,7 +213,7 @@ curl https://你的域名/healthz
 
 ## Step 5 · 接到 AI
 
-服务现在只暴露一个 MCP 工具：`health_read` — 读取健康数据：当前状态、步数、心率、睡眠、每日摘要或完整数据。
+服务只暴露一个轻量 MCP 工具：`health_read` — 读取健康数据：当前状态、步数、心率、睡眠、每日摘要或完整数据。
 
 - data_type：读取类型，可选 `current_status / steps / heart_rate / sleep / daily_summary / all`
 - time_range：`today / three_days`，今天或最近 3 天

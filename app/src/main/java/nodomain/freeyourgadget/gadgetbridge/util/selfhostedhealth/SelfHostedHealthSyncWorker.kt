@@ -29,6 +29,8 @@ import nodomain.freeyourgadget.gadgetbridge.R
 import nodomain.freeyourgadget.gadgetbridge.impl.GBDevice
 import nodomain.freeyourgadget.gadgetbridge.model.ActivitySample
 import nodomain.freeyourgadget.gadgetbridge.util.GBPrefs
+import nodomain.freeyourgadget.gadgetbridge.util.cycle.CycleContextStore
+import nodomain.freeyourgadget.gadgetbridge.util.cycle.CycleContextSyncWorker
 import org.json.JSONException
 import org.json.JSONObject
 import org.slf4j.LoggerFactory
@@ -53,6 +55,14 @@ class SelfHostedHealthSyncWorker(
 
     override fun doWork(): Result {
         val prefs = GBApplication.getPrefs()
+
+        // A cycle deletion that never reached the server has no other way back: the local values
+        // are already gone, so nothing but this periodic pass would ever retry it. Checked before
+        // the enabled guard because the leftover copy outlives the sync being switched off.
+        if (CycleContextStore.pendingClear()) {
+            CycleContextSyncWorker.enqueue(applicationContext, clear = true)
+        }
+
         if (!prefs.getBoolean(GBPrefs.SELF_HOSTED_HEALTH_ENABLED, false)) {
             LOG.info("Self-hosted health sync is disabled, skipping")
             return Result.success()

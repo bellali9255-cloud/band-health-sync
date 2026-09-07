@@ -86,15 +86,23 @@ abstract class AbstractAutoExportSettingsFragment(
                 if (result!!.resultCode != Activity.RESULT_OK) {
                     return@ActivityResultCallback
                 }
-                val uri = result.data?.data
+                val resultIntent = result.data
+                if (resultIntent == null) {
+                    LOG.error("Got no result intent")
+                    return@ActivityResultCallback
+                }
+                val uri = resultIntent.data
                 if (uri == null) {
                     LOG.error("Got no uri")
                     return@ActivityResultCallback
                 }
-                requireContext().contentResolver.takePersistableUriPermission(
-                    uri,
-                    Intent.FLAG_GRANT_WRITE_URI_PERMISSION
-                )
+                val takeFlags = resultIntent.flags and
+                    (Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+                if ((takeFlags and Intent.FLAG_GRANT_WRITE_URI_PERMISSION) == 0) {
+                    LOG.error("Selected auto-export location is not writable: {}", uri)
+                    return@ActivityResultCallback
+                }
+                requireContext().contentResolver.takePersistableUriPermission(uri, takeFlags)
                 gbPrefs.preferences.edit {
                     putString(prefKeyLocation, uri.toString())
                 }
@@ -111,11 +119,37 @@ abstract class AbstractAutoExportSettingsFragment(
         val prefExportLocation = findPreference<Preference>(prefKeyLocation)
         if (prefExportLocation != null) {
             prefExportLocation.setOnPreferenceClickListener {
-                val i = Intent(Intent.ACTION_CREATE_DOCUMENT)
-                i.setType(exporter.getFileMimeType())
-                i.addCategory(Intent.CATEGORY_OPENABLE)
-                i.putExtra(Intent.EXTRA_TITLE, "Gadgetbridge.${exporter.getFileExtension()}")
-                i.addFlags(Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+                val currentLocation = gbPrefs.getString(prefKeyLocation, "")
+                    ?.takeIf { it.isNotBlank() }
+                val i = if (currentLocation != null) {
+                    // Re-select an existing file when one is already configured. This is needed
+                    // after uninstall/reinstall, which revokes the old persistable URI grant but
+                    // may restore the URI string from app preferences. ACTION_CREATE_DOCUMENT
+                    // would silently choose a new "(1)" file instead of reauthorizing the old one.
+                    Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                        setType("*/*")
+                        addCategory(Intent.CATEGORY_OPENABLE)
+                        addFlags(
+                            Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION or
+                                Intent.FLAG_GRANT_READ_URI_PERMISSION or
+                                Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                        )
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                            putExtra(DocumentsContract.EXTRA_INITIAL_URI, currentLocation.toUri())
+                        }
+                    }
+                } else {
+                    Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
+                        setType(exporter.getFileMimeType())
+                        addCategory(Intent.CATEGORY_OPENABLE)
+                        putExtra(Intent.EXTRA_TITLE, "Gadgetbridge.${exporter.getFileExtension()}")
+                        addFlags(
+                            Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION or
+                                Intent.FLAG_GRANT_READ_URI_PERMISSION or
+                                Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                        )
+                    }
+                }
                 val title: String = requireContext().applicationContext.getString(R.string.choose_auto_export_location)
                 exportLocationPicker.launch(Intent.createChooser(i, title))
 

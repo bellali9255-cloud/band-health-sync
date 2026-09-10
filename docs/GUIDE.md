@@ -210,39 +210,25 @@ curl https://你的域名/healthz
 
 > 令牌是明文存在 App 偏好里的，跟 Gadgetbridge 其他设置一样。共用设备上别用。
 
-### 可选 · 给 AI 一点经期上下文
-
-如果你希望 AI 解读静息心率、睡眠或体温变化时知道你正在经期，可以到：
-
-`设备设置 → 健康 → 经期`
-
-这个开关默认关闭。打开后先设置「上次开始」，周期和经期天数默认是 28 天、5 天，也可以一起
-修改；之后可以点「这次来了」，或直接把「今天是第几天」改准。预计日期到后，手机和服务端都会
-自动滚到下一周期，不需要每月手动重填。
-
-AI 只会看到两类简短提示：经期中显示「经期第 X 天」（自动推算且尚未确认时显示「预计经期
-第 X 天」），距离预计开始不超过 3 天时显示「预计 X 天后来经期」。其余日子完全不带经期字段。
-不会输出排卵日、受孕窗口、周期阶段或周期长度，不能用于避孕判断。
-
-这些设置复用上面的服务器地址和上传 token，经鉴权写入你自己的服务端 `cycle.json`，不进入
-每日健康记录，也不发给华为手表或任何厂商云。关闭开关时 App 会发送一次清除通知，随后删除
-手机端设置；服务端也会删除 `cycle.json`，之后不再上传经期内容。
 
 ## Step 5 · 接到 AI
 
-服务暴露两个 MCP 工具：
+服务只暴露一个轻量 MCP 工具：`health_read` — 读取健康数据：当前状态、步数、心率、睡眠、每日摘要或完整数据。
 
-- `health_read(days, type)` — 读原始记录，`type` 可选 `steps` / `heart_rate` / `sleep` / `all`
-- `health_summary(days)` — 按天的汇总，适合日常问答
+- data_type：读取类型，可选 `current_status / steps / heart_rate / sleep / daily_summary / all`
+- time_range：`today / three_days`，今天或最近 3 天
+- days：自定义读取最近多少天，范围 1–62；设置后覆盖 `time_range`
+- heart_rate_detail：`daily / hourly`，按天汇总或额外返回小时级心率汇总
 
-MCP 入口为 `https://你的域名/mcp`（Streamable HTTP）。
+参数都可以不填。什么都不填时默认读取 `current_status`，适合 AI 日常快速了解你现在的状态。
 
-**Claude**：设置 → Connectors → 添加自定义连接器，填上面那个 URL。如果你设了读取
-token，在请求头里加 `Authorization: Bearer 你的读取token`。
+MCP 入口为：`https://你的域名/mcp`，使用 Streamable HTTP。
+
+**Claude**：设置 → Connectors → 添加自定义连接器，填上面那个 URL。如果你设了读取 token，在请求头里加：`Authorization: Bearer 你的读取token`
 
 **ChatGPT / Codex**：在 MCP 服务器配置里填同一个 URL 和同一个 Bearer 头。
 
-**命令行验证**（配之前先确认服务能应答）：
+命令行验证（配之前先确认 MCP 入口能正常握手）：
 
 ```bash
 curl -X POST https://你的域名/mcp \
@@ -252,11 +238,8 @@ curl -X POST https://你的域名/mcp \
   -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"curl","version":"1"}}}'
 ```
 
-配好之后可以问自家机：
+能正常返回 MCP 初始化响应，就说明域名、HTTPS、鉴权和 MCP 服务本身这一整条链路已经通了。
 
-> 我这周平均睡几个小时？
-> 最近我的深睡状态怎么样？
-> 我今天什么时候心率最高？
 
 ---
 

@@ -4,6 +4,21 @@
         <!-- empty array -->
     </string-array>
 
+    <string-array name="prefs_huawei_heart_rate_sync_interval">
+        <item>@string/pref_huawei_heart_rate_sync_off</item>
+        <item>@string/minutes_1</item>
+        <item>@string/minutes_3</item>
+        <item>@string/minutes_5</item>
+        <item>@string/minutes_10</item>
+    </string-array>
+    <string-array name="prefs_huawei_heart_rate_sync_interval_values">
+        <item>0</item>
+        <item>1</item>
+        <item>3</item>
+        <item>5</item>
+        <item>10</item>
+    </string-array>
+
     <!-- Self-hosted health periodic upload cadence. Values are minutes; 0 is off. All non-zero
          values are >= 15 because WorkManager clamps a shorter periodic interval up to 15 minutes. -->
     <string-array name="selfhosted_health_sync_interval">

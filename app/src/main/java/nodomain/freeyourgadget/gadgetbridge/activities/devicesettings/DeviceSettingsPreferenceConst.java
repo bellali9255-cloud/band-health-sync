@@ -683,6 +683,7 @@ public class DeviceSettingsPreferenceConst {
     public static final String PREF_FAKE_ANDROID_ID = "fake_android_id";
 
     public static final String PREF_HEARTRATE_AUTOMATIC_ENABLE = "heartrate_automatic_enable";
+    public static final String PREF_HUAWEI_HEART_RATE_SYNC_INTERVAL = "pref_huawei_heart_rate_sync_interval";
     public static final String PREF_SPO_AUTOMATIC_ENABLE = "spo_automatic_enable";
 
     public static final String PREF_FORCE_OPTIONS = "pref_force_options";

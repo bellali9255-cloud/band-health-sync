@@ -2534,6 +2534,8 @@
     <string name="pref_summary_opentracks_packagename">用於在外部健身應用程式中啟動/停止 GPS 路徑錄製。</string>
     <string name="pref_enable_call_accept">啟用接聽電話</string>
     <string name="pref_heartrate_automatic_enable">啟用自動心率測量</string>
+    <string name="pref_huawei_heart_rate_sync_interval">背景心率同步</string>
+    <string name="pref_huawei_heart_rate_sync_off">關閉</string>
     <string name="controlcenter_toggle_details">切換詳情</string>
     <string name="controlcenter_unset_folder">未設定的資料夾</string>
     <string name="steps_streaks_total_steps">總\n步數</string>

@@ -3827,6 +3827,8 @@
     <string name="pref_disable_find_phone_with_dnd">Disable find my phone when do not disturb is active</string>
 
     <string name="pref_heartrate_automatic_enable">Enable automatic heart rate measuring</string>
+    <string name="pref_huawei_heart_rate_sync_interval">Background heart rate sync</string>
+    <string name="pref_huawei_heart_rate_sync_off">Off</string>
     <string name="pref_spo_automatic_enable">Enable automatic SpO2 measuring</string>
 
     <string name="pref_heart_rate_realtime_mode">Real-time automatic heart rate measuring mode</string>

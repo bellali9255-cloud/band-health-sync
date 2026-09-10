@@ -25,8 +25,13 @@ import nodomain.freeyourgadget.gadgetbridge.service.devices.huawei.HuaweiSupport
 public class GetStepDataCountRequest extends Request {
     private int start = 0;
     private int end = 0;
+    private final Integer requestTimeout;
 
     public GetStepDataCountRequest(HuaweiSupportProvider support, int start, int end) {
+        this(support, start, end, null);
+    }
+
+    public GetStepDataCountRequest(HuaweiSupportProvider support, int start, int end, Integer requestTimeout) {
         super(support);
 
         this.serviceId = FitnessData.id;
@@ -34,6 +39,10 @@ public class GetStepDataCountRequest extends Request {
 
         this.start = start;
         this.end = end;
+        this.requestTimeout = requestTimeout;
+        if (requestTimeout != null) {
+            setupTimeoutUntilNext(requestTimeout);
+        }
     }
 
     @Override
@@ -53,7 +62,7 @@ public class GetStepDataCountRequest extends Request {
         short count = ((FitnessData.MessageCount.Response) receivedPacket).count;
 
         if (count > 0) {
-            GetStepDataRequest nextRequest = new GetStepDataRequest(supportProvider, count, (short) 0);
+            GetStepDataRequest nextRequest = new GetStepDataRequest(supportProvider, count, (short) 0, requestTimeout);
             nextRequest.setFinalizeReq(this.finalizeReq);
             this.nextRequest(nextRequest);
         }

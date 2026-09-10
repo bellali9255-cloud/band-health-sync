@@ -200,6 +200,23 @@ public class HuaweiSampleProvider extends AbstractSampleProvider<HuaweiActivityS
     }
 
     /**
+     * Gets the timestamp of the newest valid heart-rate sample received in step history data.
+     */
+    public int getLatestHeartRateTimestamp() {
+        QueryBuilder<HuaweiActivitySample> qb = getSampleDao().queryBuilder();
+        Property sourceProperty = HuaweiActivitySampleDao.Properties.Source;
+        Property heartRateProperty = HuaweiActivitySampleDao.Properties.HeartRate;
+
+        qb.where(
+                sourceProperty.eq(0x0b),
+                heartRateProperty.notEq(ActivitySample.NOT_MEASURED),
+                heartRateProperty.notEq(0)
+        );
+
+        return getLastFetchTimestamp(qb);
+    }
+
+    /**
      * Makes a copy of a sample
      * @param sample The sample to copy
      * @return The copy of the sample

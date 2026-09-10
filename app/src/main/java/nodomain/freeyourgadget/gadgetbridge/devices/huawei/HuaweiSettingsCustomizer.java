@@ -134,6 +134,7 @@ public class HuaweiSettingsCustomizer implements DeviceSpecificSettingsCustomize
         handler.addPreferenceHandlerFor(PREF_HUAWEI_HEART_RATE_REALTIME_MODE);
         handler.addPreferenceHandlerFor(PREF_HUAWEI_HEART_RATE_LOW_ALERT);
         handler.addPreferenceHandlerFor(PREF_HUAWEI_HEART_RATE_HIGH_ALERT);
+        handler.addPreferenceHandlerFor(PREF_HUAWEI_HEART_RATE_SYNC_INTERVAL);
         handler.addPreferenceHandlerFor(PREF_HUAWEI_SPO_LOW_ALERT);
         handler.addPreferenceHandlerFor(PREF_HUAWEI_STRESS_SWITCH);
         handler.addPreferenceHandlerFor(PREF_HUAWEI_STRESS_CALIBRATE);

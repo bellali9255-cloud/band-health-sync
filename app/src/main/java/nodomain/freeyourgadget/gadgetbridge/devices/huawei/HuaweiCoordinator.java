@@ -469,6 +469,7 @@ public abstract class HuaweiCoordinator extends AbstractDeviceCoordinator {
             deviceSpecificSettings.addRootScreen(DeviceSpecificSettingsScreen.HEALTH, R.xml.devicesettings_trusleep);
         if (deviceState.supportsHeartRate()) {
             deviceSpecificSettings.addRootScreen(DeviceSpecificSettingsScreen.HEALTH, R.xml.devicesettings_heartrate_automatic_enable);
+            deviceSpecificSettings.addRootScreen(DeviceSpecificSettingsScreen.HEALTH, R.xml.devicesettings_huawei_heart_rate_sync_interval);
             if (deviceState.supportsRealtimeHeartRate())
                 deviceSpecificSettings.addRootScreen(DeviceSpecificSettingsScreen.HEALTH, R.xml.devicesettings_huawei_heart_rate_realtime);
             if (deviceState.supportsHighHeartRateAlert())

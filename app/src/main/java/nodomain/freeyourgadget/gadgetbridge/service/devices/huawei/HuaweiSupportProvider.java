@@ -243,6 +243,7 @@ import nodomain.freeyourgadget.gadgetbridge.util.preferences.DevicePrefs;
 
 public class HuaweiSupportProvider {
     private static final Logger LOG = LoggerFactory.getLogger(HuaweiSupportProvider.class);
+    private static final int BACKGROUND_HEART_RATE_REQUEST_TIMEOUT_MS = 30_000;
 
     // TODO: Potentially use translatable messages for the toast messages
 
@@ -258,6 +259,20 @@ public class HuaweiSupportProvider {
     private HuaweiCoordinator.HuaweiDeviceType huaweiType;
 
     private final Handler handler = new Handler(Looper.getMainLooper());
+    private final HuaweiHeartRateSyncScheduler heartRateSyncScheduler = new HuaweiHeartRateSyncScheduler(
+            new HuaweiHeartRateSyncScheduler.DelayedExecutor() {
+                @Override
+                public void postDelayed(final Runnable runnable, final long delayMillis) {
+                    handler.postDelayed(runnable, delayMillis);
+                }
+
+                @Override
+                public void removeCallbacks(final Runnable runnable) {
+                    handler.removeCallbacks(runnable);
+                }
+            },
+            this::startBackgroundHeartRateSync
+    );
     private final Runnable batteryRunner = () -> {
         LOG.info("Running retrieving battery through runner.");
         getBatteryLevel();
@@ -987,6 +1002,7 @@ public class HuaweiSupportProvider {
                 @Override
                 public void call() {
                     gbDevice.setUpdateState(GBDevice.State.INITIALIZED, getContext());
+                    restartBackgroundHeartRateSync();
 
                     if (getDeviceState().supportsP2PService()) {
                         if (getDeviceState().supportsCalendar()) {
@@ -1245,6 +1261,9 @@ public class HuaweiSupportProvider {
                     break;
                 case DeviceSettingsPreferenceConst.PREF_DISCONNECTNOTIF_NOSHED:
                     setDisconnectNotification();
+                    break;
+                case DeviceSettingsPreferenceConst.PREF_HUAWEI_HEART_RATE_SYNC_INTERVAL:
+                    restartBackgroundHeartRateSync();
                     break;
                 case DeviceSettingsPreferenceConst.PREF_HEARTRATE_AUTOMATIC_ENABLE:
                 case HuaweiConstants.PREF_HUAWEI_HEART_RATE_REALTIME_MODE:
@@ -2643,7 +2662,139 @@ public class HuaweiSupportProvider {
         handler.removeCallbacks(batteryRunner);
     }
 
+    private void restartBackgroundHeartRateSync() {
+        if (!getDeviceState().supportsHeartRate(gbDevice)) {
+            heartRateSyncScheduler.stop();
+            return;
+        }
+
+        final SharedPreferences preferences = GBApplication.getDeviceSpecificSharedPrefs(gbDevice.getAddress());
+        final String configuredInterval = preferences.getString(
+                DeviceSettingsPreferenceConst.PREF_HUAWEI_HEART_RATE_SYNC_INTERVAL,
+                "3"
+        );
+        int intervalMinutes;
+        try {
+            intervalMinutes = Integer.parseInt(configuredInterval);
+        } catch (NumberFormatException e) {
+            LOG.warn("Invalid background heart-rate sync interval '{}', using 3 minutes", configuredInterval);
+            intervalMinutes = 3;
+        }
+        if (intervalMinutes != 0 && intervalMinutes != 1 && intervalMinutes != 3 && intervalMinutes != 5 && intervalMinutes != 10) {
+            LOG.warn("Unsupported background heart-rate sync interval '{}', using 3 minutes", intervalMinutes);
+            intervalMinutes = 3;
+        }
+
+        final long intervalMillis = intervalMinutes * 60_000L;
+        if (intervalMillis == 0) {
+            LOG.info("Background heart-rate sync disabled");
+        } else {
+            LOG.info("Background heart-rate sync scheduled every {} minutes", intervalMinutes);
+        }
+        heartRateSyncScheduler.restart(intervalMillis);
+    }
+
+    private boolean startBackgroundHeartRateSync(final Runnable completion) {
+        if (gbDevice == null || !gbDevice.isInitialized()) {
+            LOG.debug("Skipping background heart-rate sync because the device is not initialized");
+            return false;
+        }
+        if (!syncState.startHeartRateSync()) {
+            return false;
+        }
+
+        final int end = (int) (System.currentTimeMillis() / 1000L);
+        final int latestHeartRateBefore = getLatestHeartRateTimestamp();
+        final int stepStart = getBackgroundHeartRateSyncStart(end);
+        final GetStepDataCountRequest request = new GetStepDataCountRequest(
+                this,
+                stepStart,
+                end,
+                BACKGROUND_HEART_RATE_REQUEST_TIMEOUT_MS
+        );
+        final RequestCallback callback = new RequestCallback() {
+            private boolean finished;
+
+            private void finish() {
+                if (finished) {
+                    return;
+                }
+                finished = true;
+                finishBackgroundHeartRateSync(latestHeartRateBefore, completion);
+            }
+
+            @Override
+            public void call() {
+                finish();
+            }
+
+            @Override
+            public void handleException(final Request request, final Request.ResponseParseException e) {
+                LOG.warn("Background heart-rate sync request failed", e);
+                finish();
+            }
+
+            @Override
+            public void timeout(final Request request) {
+                LOG.warn("Background heart-rate sync request timed out: {}", request.getName());
+                request.stopChain();
+                removeInProgressRequests(request);
+                finish();
+            }
+        };
+        request.setFinalizeReq(callback);
+
+        try {
+            LOG.info("Starting background heart-rate sync for {} to {}", stepStart, end);
+            request.doPerform();
+            return true;
+        } catch (IOException e) {
+            LOG.warn("Unable to start background heart-rate sync", e);
+            callback.call();
+            return true;
+        }
+    }
+
+    private int getBackgroundHeartRateSyncStart(final int end) {
+        try (DBHandler db = GBApplication.acquireDB()) {
+            final HuaweiSampleProvider sampleProvider = new HuaweiSampleProvider(gbDevice, db.getDaoSession());
+            final int lastStepTimestamp = sampleProvider.getLastStepFetchTimestamp();
+            if (lastStepTimestamp > 0) {
+                return Math.max(946684800, lastStepTimestamp - 300);
+            }
+        } catch (Exception e) {
+            LOG.warn("Unable to read the last Huawei step timestamp for background heart-rate sync", e);
+        }
+        return Math.max(946684800, end - 86400);
+    }
+
+    private int getLatestHeartRateTimestamp() {
+        try (DBHandler db = GBApplication.acquireDB()) {
+            return new HuaweiSampleProvider(gbDevice, db.getDaoSession()).getLatestHeartRateTimestamp();
+        } catch (Exception e) {
+            LOG.warn("Unable to read the latest Huawei heart-rate timestamp", e);
+            return -1;
+        }
+    }
+
+    private void finishBackgroundHeartRateSync(final int latestHeartRateBefore, final Runnable completion) {
+        try {
+            final int latestHeartRateAfter = getLatestHeartRateTimestamp();
+            final boolean heartRateAdvanced = latestHeartRateBefore >= 0 && latestHeartRateAfter > latestHeartRateBefore;
+            if (heartRateAdvanced) {
+                LOG.info("Background heart-rate sync advanced from {} to {}", latestHeartRateBefore, latestHeartRateAfter);
+                GB.signalActivityDataFinish(gbDevice);
+            } else {
+                LOG.info("Background heart-rate sync completed without a newer heart-rate sample");
+            }
+        } finally {
+            syncState.stopHeartRateSync();
+            completion.run();
+        }
+    }
+
     public void dispose() {
+        heartRateSyncScheduler.stop();
         stopBatteryRunnerDelayed();
         huaweiFileDownloadManager.dispose();
         huaweiP2PManager.unregisterAllService();

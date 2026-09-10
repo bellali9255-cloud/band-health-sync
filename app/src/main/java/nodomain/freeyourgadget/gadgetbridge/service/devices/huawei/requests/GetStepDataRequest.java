@@ -37,13 +37,22 @@ public class GetStepDataRequest extends Request {
 
     short maxCount;
     short count;
+    private final Integer requestTimeout;
 
     public GetStepDataRequest(HuaweiSupportProvider support, short maxCount, short count) {
+        this(support, maxCount, count, null);
+    }
+
+    public GetStepDataRequest(HuaweiSupportProvider support, short maxCount, short count, Integer requestTimeout) {
         super(support);
         this.serviceId = FitnessData.id;
         this.commandId = FitnessData.MessageData.stepId;
         this.maxCount = maxCount;
         this.count = count;
+        this.requestTimeout = requestTimeout;
+        if (requestTimeout != null) {
+            setupTimeoutUntilNext(requestTimeout);
+        }
     }
 
     @Override
@@ -127,7 +136,7 @@ public class GetStepDataRequest extends Request {
         }
 
         if (count + 1 < maxCount) {
-            GetStepDataRequest nextRequest = new GetStepDataRequest(supportProvider, this.maxCount, (short) (this.count + 1));
+            GetStepDataRequest nextRequest = new GetStepDataRequest(supportProvider, this.maxCount, (short) (this.count + 1), requestTimeout);
             nextRequest.setFinalizeReq(this.finalizeReq);
             this.nextRequest(nextRequest);
         }

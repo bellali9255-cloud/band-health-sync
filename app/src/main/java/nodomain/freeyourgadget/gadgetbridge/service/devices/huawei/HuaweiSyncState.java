@@ -16,6 +16,7 @@ class HuaweiSyncState {
     private final List<Integer> syncQueue = new ArrayList<>(2);
 
     private boolean activitySync = false;
+    private boolean heartRateSync = false;
     private boolean p2pSync = false;
     private boolean stressSync = false;
     private boolean ecgSync = false;
@@ -27,13 +28,15 @@ class HuaweiSyncState {
     }
 
     private boolean isSyncActive() {
-        return activitySync || p2pSync || stressSync || ecgSync || workoutSync || workoutGpsDownload != 0;
+        return activitySync || heartRateSync || p2pSync || stressSync || ecgSync || workoutSync || workoutGpsDownload != 0;
     }
 
     private String activeSync() {
         StringBuilder retv = new StringBuilder();
         if (activitySync)
             retv.append("activitySync,");
+        if (heartRateSync)
+            retv.append("heartRateSync,");
         if (p2pSync)
             retv.append("p2pSync,");
         if (stressSync)
@@ -92,6 +95,27 @@ class HuaweiSyncState {
             supportProvider.fetchRecodedDataFromQueue();
         }
         updateState();
+    }
+
+    public boolean startHeartRateSync() {
+        synchronized (this) {
+            if (isSyncActive()) {
+                LOG.debug("Skipping background heart-rate sync while another sync is active: {}", activeSync());
+                return false;
+            }
+            heartRateSync = true;
+        }
+        LOG.debug("Set background heart-rate sync state to true");
+        return true;
+    }
+
+    public void stopHeartRateSync() {
+        synchronized (this) {
+            heartRateSync = false;
+        }
+        LOG.debug("Set background heart-rate sync state to false");
+        supportProvider.fetchRecodedDataFromQueue();
+        updateState(false);
     }
 
     public void setP2pSync(boolean state) {

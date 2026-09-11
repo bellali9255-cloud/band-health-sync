@@ -78,11 +78,11 @@ jobs:
           --no-parallel
           --stacktrace
 
-      - name: Run SelfHostedHealth payload tests
+      - name: Run self-hosted health tests
         run: >
           ./gradlew
           :app:testMainlineDebugUnitTest
-          --tests "nodomain.freeyourgadget.gadgetbridge.util.selfhostedhealth.SelfHostedHealthPayloadTest"
+          --tests "nodomain.freeyourgadget.gadgetbridge.util.selfhostedhealth.*"
           --no-daemon
           --no-parallel
           --stacktrace

@@ -174,7 +174,7 @@ node health-server.js
 公网入口用 Caddy / Nginx 反代，或者 Cloudflare Tunnel（不用买公网 IP，也不用开端口）。
 **必须上 HTTPS**：token 和健康数据都在明文 body 里。
 
-数据按天落盘，同一天重复上传会自动合并，不会覆盖已有记录：步数取较大值、心率按时间戳去重、时间跨度重叠的睡眠 session 只保留最完整版本。所以重复上传、或者你手动补传历史，都不会把数据搞乱。
+数据按天落盘，同一天重复上传会自动合并，不会覆盖已有记录：步数取较大值，心率、血氧、压力和体表温度按时间戳去重，时间跨度重叠的睡眠 session 只保留最完整版本。所以重复上传、或者你手动补传历史，都不会把数据搞乱。
 
 装好之后先自测一下，确认服务活着：
 
@@ -213,9 +213,9 @@ curl https://你的域名/healthz
 
 ## Step 5 · 接到 AI
 
-服务只暴露一个轻量 MCP 工具：`health_read` — 读取健康数据：当前状态、步数、心率、睡眠、每日摘要或完整数据。
+服务只暴露一个轻量 MCP 工具：`health_read` — 读取健康数据：当前状态、步数、心率、血氧、压力、体表温度、睡眠、每日摘要或完整数据。
 
-- data_type：读取类型，可选 `current_status / steps / heart_rate / sleep / daily_summary / all`
+- data_type：读取类型，可选 `current_status / steps / heart_rate / sleep / spo2 / stress / temperature / daily_summary / all`
 - time_range：`today / three_days`，今天或最近 3 天
 - days：自定义读取最近多少天，范围 1–62；设置后覆盖 `time_range`
 - heart_rate_detail：`daily / hourly`，按天汇总或额外返回小时级心率汇总
@@ -339,3 +339,4 @@ JDK 17，Android SDK / build-tools 37。产物在
 全部改动都在这个仓库里（AGPLv3 要求提供源码）：
 
 <https://github.com/xiaoyou5602/band-health-sync>
+

@@ -19,6 +19,9 @@ package nodomain.freeyourgadget.gadgetbridge.util.selfhostedhealth
 import nodomain.freeyourgadget.gadgetbridge.activities.charts.SleepAnalysis
 import nodomain.freeyourgadget.gadgetbridge.model.ActivityKind
 import nodomain.freeyourgadget.gadgetbridge.model.ActivitySample
+import nodomain.freeyourgadget.gadgetbridge.model.Spo2Sample
+import nodomain.freeyourgadget.gadgetbridge.model.StressSample
+import nodomain.freeyourgadget.gadgetbridge.model.TemperatureSample
 import org.json.JSONArray
 import org.json.JSONObject
 import java.time.Instant
@@ -92,8 +95,32 @@ object SelfHostedHealthPayload {
         zone: ZoneId,
         sleepUploadedThrough: Long,
         nowEpochSecond: Long
+    ): SelfHostedHealthPayloadSet = build(
+        samples,
+        emptyList(),
+        emptyList(),
+        emptyList(),
+        zone,
+        sleepUploadedThrough,
+        nowEpochSecond
+    )
+
+    /**
+     * Builds a payload from both activity samples (seconds) and the dedicated time-sample tables
+     * (milliseconds). Huawei devices, including Watch GT 5, store SpO2, stress and skin temperature
+     * in those dedicated providers rather than in [ActivitySample].
+     */
+    @JvmStatic
+    fun build(
+        samples: List<ActivitySample>,
+        spo2Samples: List<Spo2Sample>,
+        stressSamples: List<StressSample>,
+        temperatureSamples: List<TemperatureSample>,
+        zone: ZoneId,
+        sleepUploadedThrough: Long,
+        nowEpochSecond: Long
     ): SelfHostedHealthPayloadSet {
-        if (samples.isEmpty()) {
+        if (samples.isEmpty() && spo2Samples.isEmpty() && stressSamples.isEmpty() && temperatureSamples.isEmpty()) {
             return SelfHostedHealthPayloadSet(emptyList(), 0L)
         }
         val sorted = samples.sortedBy { it.timestamp }
@@ -101,6 +128,15 @@ object SelfHostedHealthPayload {
         val stepsByDate = LinkedHashMap<LocalDate, Long>()
         // date -> bucket start -> [bpm sum, sample count]
         val heartRateByDate = LinkedHashMap<LocalDate, LinkedHashMap<Long, IntArray>>()
+        val spo2ByDate = timeSamplesByDate(spo2Samples, zone) { sample ->
+            sample.spo2.takeIf { it in 1..100 }?.toDouble()
+        }
+        val stressByDate = timeSamplesByDate(stressSamples, zone) { sample ->
+            sample.stress.takeIf { it in 1..100 }?.toDouble()
+        }
+        val temperatureByDate = timeSamplesByDate(temperatureSamples, zone) { sample ->
+            sample.temperature.toDouble().takeIf { it.isFinite() && it in 1.0..60.0 }
+        }
 
         for (sample in sorted) {
             val timestamp = sample.timestamp.toLong()
@@ -126,7 +162,7 @@ object SelfHostedHealthPayload {
 
         val sleepByDate = LinkedHashMap<LocalDate, MutableList<JSONObject>>()
         var newestSleepEnd = 0L
-        val dataHorizon = minOf(nowEpochSecond, sorted.last().timestamp.toLong()) - SLEEP_SETTLE_SECONDS
+        val dataHorizon = if (sorted.isEmpty()) 0L else minOf(nowEpochSecond, sorted.last().timestamp.toLong()) - SLEEP_SETTLE_SECONDS
 
         for (session in SleepAnalysis().calculateSleepSessions(sorted)) {
             val stages = buildStages(sorted, session)
@@ -156,6 +192,9 @@ object SelfHostedHealthPayload {
             addAll(stepsByDate.keys)
             addAll(heartRateByDate.keys)
             addAll(sleepByDate.keys)
+            addAll(spo2ByDate.keys)
+            addAll(stressByDate.keys)
+            addAll(temperatureByDate.keys)
         }
 
         val days = dates.mapNotNull { date ->
@@ -179,6 +218,9 @@ object SelfHostedHealthPayload {
             sleepByDate[date]?.let { sessions ->
                 body.put("sleep", JSONArray(sessions))
             }
+            spo2ByDate[date]?.let { body.put("spo2", JSONArray(it)) }
+            stressByDate[date]?.let { body.put("stress", JSONArray(it)) }
+            temperatureByDate[date]?.let { body.put("temperature", JSONArray(it)) }
 
             // "date" alone carries no data and would still rewrite the server's file.
             if (body.length() > 1) SelfHostedHealthDay(date.toString(), body) else null
@@ -269,8 +311,28 @@ object SelfHostedHealthPayload {
     private fun localDate(epochSecond: Long, zone: ZoneId): LocalDate =
         ZonedDateTime.ofInstant(Instant.ofEpochSecond(epochSecond), zone).toLocalDate()
 
+    private fun <T> timeSamplesByDate(
+        samples: List<T>,
+        zone: ZoneId,
+        value: (T) -> Double?
+    ): LinkedHashMap<LocalDate, MutableList<JSONObject>> where T : nodomain.freeyourgadget.gadgetbridge.model.TimeSample {
+        val byDate = LinkedHashMap<LocalDate, MutableList<JSONObject>>()
+        for (sample in samples.sortedBy { it.timestamp }) {
+            val sampleValue = value(sample) ?: continue
+            val instant = Instant.ofEpochMilli(sample.timestamp)
+            val date = ZonedDateTime.ofInstant(instant, zone).toLocalDate()
+            byDate.getOrPut(date) { mutableListOf() }.add(
+                JSONObject()
+                    .put("timestamp", TIMESTAMP_FORMAT.format(ZonedDateTime.ofInstant(instant, zone)))
+                    .put("value", sampleValue)
+            )
+        }
+        return byDate
+    }
+
     /** ISO 8601 with an explicit offset: the server files data by calendar day and must not have to
      *  guess which zone a naive local time came from. */
     private fun formatTimestamp(epochSecond: Long, zone: ZoneId): String =
         TIMESTAMP_FORMAT.format(ZonedDateTime.ofInstant(Instant.ofEpochSecond(epochSecond), zone))
 }
+

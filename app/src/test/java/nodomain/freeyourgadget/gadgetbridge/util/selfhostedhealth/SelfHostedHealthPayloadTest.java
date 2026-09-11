@@ -18,6 +18,9 @@ import java.util.List;
 import nodomain.freeyourgadget.gadgetbridge.devices.SampleProvider;
 import nodomain.freeyourgadget.gadgetbridge.model.ActivityKind;
 import nodomain.freeyourgadget.gadgetbridge.model.ActivitySample;
+import nodomain.freeyourgadget.gadgetbridge.model.Spo2Sample;
+import nodomain.freeyourgadget.gadgetbridge.model.StressSample;
+import nodomain.freeyourgadget.gadgetbridge.model.TemperatureSample;
 
 /**
  * Pins the wire format the self-hosted health server ingests. The server merges rather than
@@ -101,6 +104,45 @@ public class SelfHostedHealthPayloadTest {
 
         SelfHostedHealthPayloadSet payload =
                 SelfHostedHealthPayload.build(samples, ZONE, 0L, ts(2026, 9, 2, 10, 0));
+
+        assertEquals(0, payload.getDays().size());
+    }
+
+    @Test
+    public void dedicatedHuaweiHealthSamplesAreUploadedByLocalDay() throws Exception {
+        long eight = ts(2026, 9, 2, 8, 0) * 1000L;
+        long nine = ts(2026, 9, 2, 9, 0) * 1000L;
+        SelfHostedHealthPayloadSet payload = SelfHostedHealthPayload.build(
+                Collections.emptyList(),
+                Arrays.asList(new MockSpo2Sample(eight, 96), new MockSpo2Sample(nine, 98)),
+                Arrays.asList(new MockStressSample(eight, 30), new MockStressSample(nine, 42)),
+                Collections.singletonList(new MockTemperatureSample(nine, 34.65f)),
+                ZONE,
+                0L,
+                ts(2026, 9, 2, 10, 0)
+        );
+
+        JSONObject body = bodyFor(payload, "2026-09-02");
+        assertEquals(2, body.getJSONArray("spo2").length());
+        assertEquals(98, body.getJSONArray("spo2").getJSONObject(1).getInt("value"));
+        assertEquals(42, body.getJSONArray("stress").getJSONObject(1).getInt("value"));
+        assertEquals(34.65, body.getJSONArray("temperature").getJSONObject(0).getDouble("value"), 0.001);
+        assertEquals("2026-09-02T09:00:00+08:00",
+                body.getJSONArray("temperature").getJSONObject(0).getString("timestamp"));
+    }
+
+    @Test
+    public void invalidDedicatedHealthSamplesAreDropped() {
+        long timestamp = ts(2026, 9, 2, 8, 0) * 1000L;
+        SelfHostedHealthPayloadSet payload = SelfHostedHealthPayload.build(
+                Collections.emptyList(),
+                Collections.singletonList(new MockSpo2Sample(timestamp, 0)),
+                Collections.singletonList(new MockStressSample(timestamp, -1)),
+                Collections.singletonList(new MockTemperatureSample(timestamp, Float.NaN)),
+                ZONE,
+                0L,
+                ts(2026, 9, 2, 10, 0)
+        );
 
         assertEquals(0, payload.getDays().size());
     }
@@ -249,4 +291,36 @@ public class SelfHostedHealthPayloadTest {
         @Override public int getHeartRate() { return heartRate; }
         @Override public void setHeartRate(int value) { this.heartRate = value; }
     }
+
+    private static class MockSpo2Sample implements Spo2Sample {
+        private final long timestamp;
+        private final int value;
+
+        MockSpo2Sample(long timestamp, int value) { this.timestamp = timestamp; this.value = value; }
+        @Override public long getTimestamp() { return timestamp; }
+        @Override public Type getType() { return Type.AUTOMATIC; }
+        @Override public int getSpo2() { return value; }
+    }
+
+    private static class MockStressSample implements StressSample {
+        private final long timestamp;
+        private final int value;
+
+        MockStressSample(long timestamp, int value) { this.timestamp = timestamp; this.value = value; }
+        @Override public long getTimestamp() { return timestamp; }
+        @Override public Type getType() { return Type.AUTOMATIC; }
+        @Override public int getStress() { return value; }
+    }
+
+    private static class MockTemperatureSample implements TemperatureSample {
+        private final long timestamp;
+        private final float value;
+
+        MockTemperatureSample(long timestamp, float value) { this.timestamp = timestamp; this.value = value; }
+        @Override public long getTimestamp() { return timestamp; }
+        @Override public float getTemperature() { return value; }
+        @Override public int getTemperatureType() { return TYPE_SKIN; }
+        @Override public int getTemperatureLocation() { return LOCATION_WRIST; }
+    }
 }
+

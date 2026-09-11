@@ -26,8 +26,13 @@ import androidx.work.Worker
 import androidx.work.WorkerParameters
 import nodomain.freeyourgadget.gadgetbridge.GBApplication
 import nodomain.freeyourgadget.gadgetbridge.R
+import nodomain.freeyourgadget.gadgetbridge.devices.TimeSampleProvider
 import nodomain.freeyourgadget.gadgetbridge.impl.GBDevice
 import nodomain.freeyourgadget.gadgetbridge.model.ActivitySample
+import nodomain.freeyourgadget.gadgetbridge.model.Spo2Sample
+import nodomain.freeyourgadget.gadgetbridge.model.StressSample
+import nodomain.freeyourgadget.gadgetbridge.model.TemperatureSample
+import nodomain.freeyourgadget.gadgetbridge.model.TimeSample
 import nodomain.freeyourgadget.gadgetbridge.util.GBPrefs
 import nodomain.freeyourgadget.gadgetbridge.util.cycle.CycleContextStore
 import nodomain.freeyourgadget.gadgetbridge.util.cycle.CycleContextSyncWorker
@@ -52,6 +57,15 @@ class SelfHostedHealthSyncWorker(
     context: Context,
     params: WorkerParameters
 ) : Worker(context, params) {
+
+    private data class DeviceHealthSamples(
+        val activity: List<ActivitySample>,
+        val spo2: List<Spo2Sample>,
+        val stress: List<StressSample>,
+        val temperature: List<TemperatureSample>
+    ) {
+        val size: Int get() = activity.size + spo2.size + stress.size + temperature.size
+    }
 
     override fun doWork(): Result {
         val prefs = GBApplication.getPrefs()
@@ -107,11 +121,19 @@ class SelfHostedHealthSyncWorker(
 
             // Reading and packaging share one guard: neither should be able to throw past doWork,
             // or WorkManager records a bare failure and this screen keeps showing the stale status.
-            val samples: List<ActivitySample>
+            val samples: DeviceHealthSamples
             val payload: SelfHostedHealthPayloadSet
             try {
                 samples = readSamples(device, windowStart, now)
-                payload = SelfHostedHealthPayload.build(samples, zone, sleepCursor, now)
+                payload = SelfHostedHealthPayload.build(
+                    samples.activity,
+                    samples.spo2,
+                    samples.stress,
+                    samples.temperature,
+                    zone,
+                    sleepCursor,
+                    now
+                )
             } catch (e: Exception) {
                 LOG.error("Could not prepare self-hosted health payload for {}", address, e)
                 failure = e.message ?: e.javaClass.simpleName
@@ -190,14 +212,29 @@ class SelfHostedHealthSyncWorker(
             .toEpochSecond()
     }
 
-    private fun readSamples(device: GBDevice, fromTs: Long, toTs: Long): List<ActivitySample> {
+    private fun readSamples(device: GBDevice, fromTs: Long, toTs: Long): DeviceHealthSamples {
         return GBApplication.acquireDbReadOnly().use { db ->
-            val provider = device.deviceCoordinator.getSampleProvider(device, db.daoSession)
-                ?: return@use emptyList()
+            val coordinator = device.deviceCoordinator
+            val provider = coordinator.getSampleProvider(device, db.daoSession)
             @Suppress("UNCHECKED_CAST")
-            provider.getAllActivitySamples(fromTs.toInt(), toTs.toInt()) as List<ActivitySample>
+            val activity = provider?.getAllActivitySamples(fromTs.toInt(), toTs.toInt()) as? List<ActivitySample>
+                ?: emptyList()
+            val fromMs = fromTs * 1000L
+            val toMs = toTs * 1000L
+            DeviceHealthSamples(
+                activity = activity,
+                spo2 = readTimeSamples(coordinator.getSpo2SampleProvider(device, db.daoSession), fromMs, toMs),
+                stress = readTimeSamples(coordinator.getStressSampleProvider(device, db.daoSession), fromMs, toMs),
+                temperature = readTimeSamples(coordinator.getTemperatureSampleProvider(device, db.daoSession), fromMs, toMs)
+            )
         }
     }
+
+    private fun <T : TimeSample> readTimeSamples(
+        provider: TimeSampleProvider<out T>?,
+        fromMs: Long,
+        toMs: Long
+    ): List<T> = provider?.getAllSamples(fromMs, toMs)?.toList().orEmpty()
 
     private fun selectedDevices(prefs: GBPrefs, requestedAddress: String?): List<GBDevice> {
         val selected = prefs.getStringSet(GBPrefs.SELF_HOSTED_HEALTH_DEVICE_SELECTION, emptySet())
@@ -240,10 +277,12 @@ class SelfHostedHealthSyncWorker(
         payload = prettyPayload(day.body)
     )
 
-    /** Steps count as one record; each heart-rate point and each sleep session counts on its own. */
+    /** Steps count as one record; each sampled metric point and sleep session counts on its own. */
     private fun countRecords(body: JSONObject): Int {
         var count = if (body.has("steps")) 1 else 0
-        count += body.optJSONArray("heart_rate")?.length() ?: 0
+        for (metric in listOf("heart_rate", "spo2", "stress", "temperature")) {
+            count += body.optJSONArray(metric)?.length() ?: 0
+        }
         count += body.optJSONArray("sleep")?.length() ?: 0
         return count
     }
@@ -323,3 +362,4 @@ class SelfHostedHealthSyncWorker(
         fun sleepCursorKey(address: String): String = "selfhosted_health_sleep_cursor_" + address.uppercase(Locale.ROOT)
     }
 }
+

@@ -38,7 +38,13 @@ jobs:
         uses: android-actions/setup-android@v3
 
       - name: Install required Android SDK packages
-        run: sdkmanager "platforms;android-37" "build-tools;37.0.0"
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdkmanager --channel=3 "cmdline-tools;latest"
+          SDK_MANAGER="${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager"
+          "${SDK_MANAGER}" --list --channel=3             | grep -E "^(platforms;android-37|build-tools;37\\.)"             || true
+          "${SDK_MANAGER}" --channel=3             "platforms;android-37"             "build-tools;37.0.0"
 
       - name: Verify required Gradle tasks
         shell: bash

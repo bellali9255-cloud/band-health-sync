@@ -48,10 +48,9 @@ jobs:
           fi
           ANDROID_CLI="$(dirname "${SDK_MANAGER}")/android"
           echo "Using $(${ANDROID_CLI} --version | head -n 1) from ${ANDROID_CLI}"
-          "${ANDROID_CLI}" --sdk="${ANDROID_SDK_ROOT}" sdk list ".*" --all --all-versions --canary > "${RUNNER_TEMP}/sdk-packages.txt"
-          grep -iE "cinnamon|(^|[/;])android-?37|build-tools[/;]37" "${RUNNER_TEMP}/sdk-packages.txt" || true
-          echo "::error::Diagnostic run: use the exact API 37 package IDs printed above"
-          exit 1
+          "${ANDROID_CLI}" --sdk="${ANDROID_SDK_ROOT}" sdk install --canary platforms/android-37.0 build-tools/37.0.0
+          test -f "${ANDROID_SDK_ROOT}/platforms/android-37.0/android.jar"
+          test -x "${ANDROID_SDK_ROOT}/build-tools/37.0.0/aapt2"
 
       - name: Make Gradle wrapper executable
         run: chmod +x ./gradlew

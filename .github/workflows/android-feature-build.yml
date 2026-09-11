@@ -42,16 +42,20 @@ jobs:
         run: |
           set -euo pipefail
           sdkmanager --channel=3 "cmdline-tools;latest"
-          SDK_MANAGER="${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager"
-          "${SDK_MANAGER}" --list --channel=3             | grep -E "^(platforms;android-37|build-tools;37\\.)"             || true
-          "${SDK_MANAGER}" --channel=3             "platforms;android-37"             "build-tools;37.0.0"
+          SDK_MANAGER="${ANDROID_SDK_ROOT}/cmdline-tools/latest-2/bin/sdkmanager"
+          if [[ ! -x "${SDK_MANAGER}" ]]; then
+            SDK_MANAGER="${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager"
+          fi
+          echo "Using $("${SDK_MANAGER}" --version | head -n 1) from ${SDK_MANAGER}"
+          "${SDK_MANAGER}" --list --channel=3 | grep -E "^(platforms;android-37|build-tools;37\\.)" || true
+          "${SDK_MANAGER}" --channel=3 "platforms;android-37" "build-tools;37.0.0"
 
       - name: Verify required Gradle tasks
         shell: bash
         run: |
           set -euo pipefail
           ./gradlew :app:tasks --all --console=plain > "${RUNNER_TEMP}/app-gradle-tasks.txt"
-          for task in             compileMainlineDebugKotlin             compileMainlineDebugJavaWithJavac             testMainlineDebugUnitTest             assembleMainlineDebug
+          for task in compileMainlineDebugKotlin compileMainlineDebugJavaWithJavac testMainlineDebugUnitTest assembleMainlineDebug
           do
             if ! grep -Eq "^\\s*${task}(\\s|$)" "${RUNNER_TEMP}/app-gradle-tasks.txt"; then
               echo "::error::Required Gradle task not found: ${task}"

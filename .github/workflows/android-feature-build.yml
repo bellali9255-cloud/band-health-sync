@@ -46,9 +46,15 @@ jobs:
           if [[ ! -x "${SDK_MANAGER}" ]]; then
             SDK_MANAGER="${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager"
           fi
-          echo "Using $("${SDK_MANAGER}" --version | head -n 1) from ${SDK_MANAGER}"
-          "${SDK_MANAGER}" --list --channel=3 | grep -E "^(platforms;android-37|build-tools;37\\.)" || true
-          "${SDK_MANAGER}" --channel=3 "platforms;android-37" "build-tools;37.0.0"
+          ANDROID_CLI="$(dirname "${SDK_MANAGER}")/android"
+          echo "Using $(${ANDROID_CLI} --version | head -n 1) from ${ANDROID_CLI}"
+          "${ANDROID_CLI}" --sdk="${ANDROID_SDK_ROOT}" sdk list "^(platforms/android-37|build-tools/37\\.)" --all --canary
+          "${ANDROID_CLI}" --sdk="${ANDROID_SDK_ROOT}" sdk install --canary platforms/android-37 build-tools/37.0.0
+          test -f "${ANDROID_SDK_ROOT}/platforms/android-37/android.jar"
+          test -x "${ANDROID_SDK_ROOT}/build-tools/37.0.0/aapt2"
+
+      - name: Make Gradle wrapper executable
+        run: chmod +x ./gradlew
 
       - name: Verify required Gradle tasks
         shell: bash
